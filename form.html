@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Submit Your Info</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f0f4f8; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+  .card { background: #fff; border-radius: 16px; padding: 2rem; width: 100%; max-width: 460px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+  h1 { font-size: 22px; font-weight: 600; color: #1a1a2e; margin-bottom: 6px; }
+  .subtitle { font-size: 14px; color: #64748b; margin-bottom: 1.5rem; }
+  .field { margin-bottom: 1rem; }
+  label { display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 5px; }
+  input, textarea { width: 100%; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; font-size: 14px; color: #1a1a2e; transition: border-color 0.15s; outline: none; font-family: inherit; }
+  input:focus, textarea:focus { border-color: #2dd4bf; box-shadow: 0 0 0 3px rgba(45,212,191,0.15); }
+  textarea { resize: vertical; min-height: 80px; }
+  .required { color: #e24b4a; }
+  button { width: 100%; padding: 11px; background: #1b2a4a; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; margin-top: 0.5rem; transition: background 0.15s; }
+  button:hover { background: #263c6a; }
+  .success { display: none; margin-top: 1rem; background: #ecfdf5; border: 1px solid #6ee7b7; color: #065f46; padding: 12px 16px; border-radius: 8px; font-size: 14px; text-align: center; }
+  .error { display: none; color: #b91c1c; font-size: 12px; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Share your details</h1>
+  <p class="subtitle">Fill in the form below. Fields marked <span class="required">*</span> are required.</p>
+
+  <div class="field">
+    <label for="name">Full name <span class="required">*</span></label>
+    <input type="text" id="name" placeholder="Jane Smith" />
+    <div class="error" id="err-name">Please enter your name.</div>
+  </div>
+  <div class="field">
+    <label for="age">Age <span class="required">*</span></label>
+    <input type="number" id="age" placeholder="28" min="1" max="120" />
+    <div class="error" id="err-age">Please enter a valid age.</div>
+  </div>
+  <div class="field">
+    <label for="email">Email <span style="color:#94a3b8">(optional)</span></label>
+    <input type="email" id="email" placeholder="jane@example.com" />
+    <div class="error" id="err-email">Please enter a valid email.</div>
+  </div>
+  <div class="field">
+    <label for="note">Note <span style="color:#94a3b8">(optional)</span></label>
+    <textarea id="note" placeholder="Anything else you'd like to share..."></textarea>
+  </div>
+
+  <button onclick="submitForm()">Submit</button>
+  <div class="success" id="success">
+    ✓ Submitted! Thank you for sharing your details.
+  </div>
+</div>
+
+<script>
+  // ── STORAGE KEY — must match admin.html ──────────────────────────
+  const STORAGE_KEY = 'my_form_submissions';
+  // ────────────────────────────────────────────────────────────────
+
+  function submitForm() {
+    let valid = true;
+
+    const name = document.getElementById('name').value.trim();
+    const age  = document.getElementById('age').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const note  = document.getElementById('note').value.trim();
+
+    document.querySelectorAll('.error').forEach(e => e.style.display = 'none');
+
+    if (!name) { document.getElementById('err-name').style.display = 'block'; valid = false; }
+    if (!age || isNaN(age) || age < 1 || age > 120) { document.getElementById('err-age').style.display = 'block'; valid = false; }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { document.getElementById('err-email').style.display = 'block'; valid = false; }
+    if (!valid) return;
+
+    const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    existing.push({ id: Date.now(), name, age: parseInt(age), email, note, time: new Date().toLocaleString() });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
+
+    ['name','age','email','note'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('success').style.display = 'block';
+    setTimeout(() => document.getElementById('success').style.display = 'none', 4000);
+  }
+</script>
+</body>
+</html>
