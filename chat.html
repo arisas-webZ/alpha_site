@@ -1,25 +1,172 @@
-function doPost(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  const data = JSON.parse(e.postData.contents);
-  sheet.appendRow([
-    data.name,
-    data.age,
-    data.email,
-    data.note,
-    new Date().toLocaleString()
-  ]);
-  return ContentService
-    .createTextOutput(JSON.stringify({ result: 'success' }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Chat</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background-image: url('xpwallpaper.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
 
-function doGet(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  const rows = sheet.getDataRange().getValues();
-  const data = rows.slice(1).map(r => ({
-    name: r[0], age: r[1], note: r[3], time: r[4]
-  }));
-  return ContentService
-    .createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
-}
+  .chat-wrap { width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: 12px; }
+
+  .chat-header { background: rgba(27,42,74,0.92); backdrop-filter: blur(8px); border-radius: 14px; padding: 14px 18px; color: #fff; display: flex; align-items: center; justify-content: space-between; }
+  .chat-header h1 { font-size: 17px; font-weight: 600; }
+  .online-dot { width: 9px; height: 9px; background: #2dd4bf; border-radius: 50%; display: inline-block; margin-right: 6px; animation: pulse 1.5s infinite; }
+  .online-label { font-size: 12px; color: #94a3b8; display: flex; align-items: center; }
+
+  .name-card { background: rgba(255,255,255,0.9); backdrop-filter: blur(6px); border-radius: 14px; padding: 14px 16px; display: flex; gap: 8px; align-items: center; }
+  .name-card input { flex: 1; padding: 8px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none; font-family: inherit; background: #fff; }
+  .name-card input:focus { border-color: #2dd4bf; }
+  .name-card button { padding: 8px 14px; background: #1b2a4a; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .name-card button:hover { background: #263c6a; }
+
+  .messages-box { background: rgba(255,255,255,0.88); backdrop-filter: blur(6px); border-radius: 14px; padding: 14px; height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
+  .messages-box::-webkit-scrollbar { width: 5px; }
+  .messages-box::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+  .msg { display: flex; flex-direction: column; gap: 2px; max-width: 85%; }
+  .msg.me { align-self: flex-end; align-items: flex-end; }
+  .msg.them { align-self: flex-start; align-items: flex-start; }
+  .msg-username { font-size: 11px; font-weight: 600; color: #64748b; padding: 0 4px; }
+  .msg-bubble { padding: 9px 13px; border-radius: 14px; font-size: 14px; line-height: 1.4; word-break: break-word; }
+  .msg.me .msg-bubble { background: #1b2a4a; color: #fff; border-bottom-right-radius: 4px; }
+  .msg.them .msg-bubble { background: #f1f5f9; color: #1a1a2e; border-bottom-left-radius: 4px; }
+  .msg-time { font-size: 10px; color: #94a3b8; padding: 0 4px; }
+
+  .empty-state { text-align: center; color: #94a3b8; font-size: 14px; margin: auto; }
+  .empty-state div { font-size: 28px; margin-bottom: 6px; }
+
+  .input-area { background: rgba(255,255,255,0.9); backdrop-filter: blur(6px); border-radius: 14px; padding: 12px; display: flex; gap: 8px; align-items: flex-end; }
+  .input-area textarea { flex: 1; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 10px; font-size: 14px; outline: none; font-family: inherit; resize: none; max-height: 100px; line-height: 1.4; background: #fff; }
+  .input-area textarea:focus { border-color: #2dd4bf; }
+  .send-btn { padding: 9px 16px; background: #1b2a4a; color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 500; cursor: pointer; height: 40px; }
+  .send-btn:hover { background: #263c6a; }
+  .send-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+
+  .locked { opacity: 0.5; pointer-events: none; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+</style>
+</head>
+<body>
+<div class="chat-wrap">
+
+  <div class="chat-header">
+    <h1>💬 Live Chat</h1>
+    <div class="online-label"><span class="online-dot"></span> Live</div>
+  </div>
+
+  <div class="name-card" id="name-card">
+    <input type="text" id="username-input" placeholder="Enter your name to join..." maxlength="20" onkeydown="if(event.key==='Enter')setName()" />
+    <button onclick="setName()">Join</button>
+  </div>
+
+  <div class="messages-box" id="messages-box">
+    <div class="empty-state"><div>💬</div>No messages yet. Be the first!</div>
+  </div>
+
+  <div class="input-area locked" id="input-area">
+    <textarea id="msg-input" placeholder="Type a message..." rows="1" maxlength="500"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
+      oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+    <button class="send-btn" id="send-btn" onclick="sendMessage()">Send</button>
+  </div>
+
+</div>
+
+<script>
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyyaWIa7idEPpG436ODInw1g6df9jtxLxcqfyFrk7zb79BFyqTZwAxFFAVjWDFBDwQkZg/exec';
+  let username = '';
+  let lastCount = 0;
+
+  function setName() {
+    const val = document.getElementById('username-input').value.trim();
+    if (!val) return;
+    username = val;
+    document.getElementById('name-card').style.display = 'none';
+    document.getElementById('input-area').classList.remove('locked');
+    document.getElementById('msg-input').focus();
+    loadMessages();
+  }
+
+  async function sendMessage() {
+    const input = document.getElementById('msg-input');
+    const msg = input.value.trim();
+    if (!msg || !username) return;
+
+    const btn = document.getElementById('send-btn');
+    btn.disabled = true;
+    input.value = '';
+    input.style.height = 'auto';
+
+    try {
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, message: msg })
+      });
+      setTimeout(loadMessages, 800);
+    } catch(e) {
+      console.error(e);
+    } finally {
+      btn.disabled = false;
+      input.focus();
+    }
+  }
+
+  async function loadMessages() {
+    try {
+      const res = await fetch(SCRIPT_URL + '?v=' + Date.now());
+      const data = await res.json();
+      if (data.length === lastCount) return;
+      lastCount = data.length;
+      renderMessages(data);
+    } catch(e) {}
+  }
+
+  function renderMessages(data) {
+    const box = document.getElementById('messages-box');
+    const wasAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+
+    if (!data.length) {
+      box.innerHTML = '<div class="empty-state"><div>💬</div>No messages yet. Be the first!</div>';
+      return;
+    }
+
+    box.innerHTML = data.map(m => `
+      <div class="msg ${m.username === username ? 'me' : 'them'}">
+        <div class="msg-username">${escapeHtml(m.username)}</div>
+        <div class="msg-bubble">${escapeHtml(m.message)}</div>
+        <div class="msg-time">${m.time}</div>
+      </div>
+    `).join('');
+
+    if (wasAtBottom || data[data.length-1].username === username) {
+      box.scrollTop = box.scrollHeight;
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // Poll every 5 seconds for new messages
+  setInterval(loadMessages, 3000);
+  loadMessages();
+</script>
+</body>
+</html>
