@@ -19,7 +19,6 @@
             margin: 0; 
         }
         
-        /* Soft frosted-glass chat wrapper */
         .chat-container { 
             width: 420px; 
             height: 520px;
@@ -34,7 +33,6 @@
             overflow: hidden; 
         }
         
-        /* Clean, inviting header */
         .chat-header { 
             color: #3a4f41; 
             padding: 20px; 
@@ -44,9 +42,9 @@
             letter-spacing: -0.3px;
             background: rgba(233, 240, 236, 0.6); 
             border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            flex-shrink: 0; /* Ensures the header doesn't shrink */
         }
         
-        /* Spacious and smooth scrolling message track */
         .chat-messages { 
             flex: 1; 
             padding: 20px; 
@@ -57,7 +55,6 @@
             gap: 12px;
         }
         
-        /* Gentle, cloud-like message bubbles */
         .message { 
             padding: 10px 14px; 
             border-radius: 14px; 
@@ -70,7 +67,6 @@
             animation: fadeIn 0.25s ease-out;
         }
         
-        /* Muted, friendly username styling */
         .message .username { 
             font-weight: 600; 
             color: #5c7865; 
@@ -86,16 +82,17 @@
             line-height: 1.4;
         }
 
-        /* Seamless layout inside the input deck */
         .chat-input-area { 
             display: flex; 
             padding: 16px; 
             background: rgba(255, 255, 255, 0.5); 
             border-top: 1px solid rgba(0, 0, 0, 0.05);
             gap: 8px; 
+            flex-shrink: 0; /* Protects input area from getting squeezed */
+            box-sizing: border-box;
+            width: 100%;
         }
         
-        /* Pill-shaped subtle text boxes */
         .chat-input-area input { 
             padding: 12px 16px; 
             border: 1px solid rgba(0, 0, 0, 0.08); 
@@ -105,6 +102,7 @@
             font-size: 0.9rem;
             color: #2c3530;
             transition: all 0.2s ease;
+            box-sizing: border-box;
         }
         
         .chat-input-area input:focus {
@@ -112,21 +110,31 @@
             box-shadow: 0 0 0 3px rgba(143, 174, 152, 0.15);
         }
         
-        #usernameInput { width: 90px; text-align: center; }
-        #messageInput { flex: 1; }
+        #usernameInput { 
+            width: 85px; 
+            text-align: center;
+            flex-shrink: 0; /* Won't get squished */
+        }
         
-        /* Soft-toned actionable friendly button */
+        #messageInput { 
+            flex: 1; 
+            min-width: 0; /* Allows input to properly shrink to fill layout */
+        }
+        
         .chat-input-area button { 
             background: #73937e; 
             color: white; 
             border: none; 
             padding: 0 20px; 
+            height: 43px; /* Explicit height matching input boxes */
             border-radius: 25px; 
             cursor: pointer; 
             font-weight: 500;
             font-size: 0.9rem;
             transition: all 0.2s ease;
             box-shadow: 0 2px 5px rgba(115, 147, 126, 0.2);
+            flex-shrink: 0; /* Forces full send button to stay visible */
+            white-space: nowrap;
         }
         
         .chat-input-area button:hover { 
@@ -147,7 +155,7 @@
 <body>
 
 <div class="chat-container">
-    <div class="chat-header">🌸 Shared Space Chat</div>
+    <div class="chat-header">🍥 Shared Space Chat</div>
     <div class="chat-messages" id="chatMessages"></div>
     <div class="chat-input-area">
         <input type="text" id="usernameInput" placeholder="Name" maxlength="12" required />
@@ -159,6 +167,7 @@
 <script>
     const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwgM1F6q_8_tSNvClZBD8dczOi5B11cQyePnwBymX6rJIsT0Q8f-vrxQV8WDrPv6fIJzQ/exec"; 
     let isUserScrolling = false;
+    let localMessageCount = 0; // Tracks number of loaded messages to stop UI flashes
 
     const chatMessages = document.getElementById("chatMessages");
     chatMessages.addEventListener('scroll', () => {
@@ -174,16 +183,28 @@
             const response = await fetch(`${WEB_APP_URL}?action=getMessages`);
             const data = await response.json();
             
-            chatMessages.innerHTML = "";
-            data.forEach(msg => {
-                const msgDiv = document.createElement("div");
-                msgDiv.classList.add("message");
-                msgDiv.innerHTML = `<span class="username">${escapeHTML(msg.username)}</span><span class="text-content">${escapeHTML(msg.message)}</span>`;
-                chatMessages.appendChild(msgDiv);
-            });
-            
-            if (!isUserScrolling) {
-                chatMessages.scrollTop = chatMessages.scrollHeight;
+            // Only update DOM if new entries exist to eliminate flickering
+            if (data.length !== localMessageCount) {
+                // If messages were somehow deleted or cleared, reset container cleanly
+                if (data.length < localMessageCount) {
+                    chatMessages.innerHTML = "";
+                    localMessageCount = 0;
+                }
+
+                // Append only the newly added items
+                for (let i = localMessageCount; i < data.length; i++) {
+                    const msg = data[i];
+                    const msgDiv = document.createElement("div");
+                    msgDiv.classList.add("message");
+                    msgDiv.innerHTML = `<span class="username">${escapeHTML(msg.username)}</span><span class="text-content">${escapeHTML(msg.message)}</span>`;
+                    chatMessages.appendChild(msgDiv);
+                }
+                
+                localMessageCount = data.length; // Update baseline count
+                
+                if (!isUserScrolling) {
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
             }
         } catch (error) {
             console.error("Error loading messages:", error);
@@ -215,6 +236,7 @@
                 body: JSON.stringify(payload)
             });
             
+            // Fast background load after typing
             setTimeout(loadMessages, 300); 
         } catch (error) {
             console.error("Error sending message:", error);
